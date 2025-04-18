@@ -2,7 +2,8 @@ import express from "express";
 import cors from "cors";
 import authRoutes from "./routes/authRoutes.js";
 import iotRoutes from "./routes/iotRoutes.js";
-import testRoutes from "./routes/testRoutes.js";
+import wordGroupRoutes from "./routes/wordGroupRoutes.js";
+import wordRoutes from "./routes/wordRoutes.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -15,7 +16,8 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/iot", iotRoutes);
-app.use("/api", testRoutes);
+app.use("/api/word-groups", wordGroupRoutes);
+app.use("/api/words", wordRoutes);
 
 app.get("/", (req, res) => {
   res.json({
