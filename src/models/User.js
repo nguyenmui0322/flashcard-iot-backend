@@ -17,11 +17,25 @@ class User {
     };
   }
 
+  static async findByUid(uid) {
+    const snapshot = await usersCollection.where("uid", "==", uid).get();
+    if (snapshot.empty) {
+      return null;
+    }
+
+    const userData = snapshot.docs[0].data();
+    return {
+      id: snapshot.docs[0].id,
+      ...userData,
+    };
+  }
+
   static async create(userData) {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(userData.password, salt);
 
     const userRef = await usersCollection.add({
+      uid: userData.uid,
       email: userData.email,
       password: hashedPassword,
       name: userData.name,

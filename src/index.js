@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import authRoutes from "./routes/authRoutes.js";
 import iotRoutes from "./routes/iotRoutes.js";
+import testRoutes from "./routes/testRoutes.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -14,6 +15,7 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/iot", iotRoutes);
+app.use("/api", testRoutes);
 
 app.get("/", (req, res) => {
   res.json({
