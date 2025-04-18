@@ -1,7 +1,6 @@
 import WordGroup from "../models/WordGroup.js";
 import Word from "../models/Word.js";
 
-// GET /word-groups
 export const getWordGroups = async (req, res) => {
   try {
     const userId = req.user.uid;
@@ -21,10 +20,9 @@ export const getWordGroups = async (req, res) => {
   }
 };
 
-// POST /word-groups
 export const createWordGroup = async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { name } = req.body;
     const userId = req.user.uid;
 
     if (!name) {
@@ -36,7 +34,6 @@ export const createWordGroup = async (req, res) => {
 
     const group = await WordGroup.create({
       name,
-      description,
       userId,
     });
 
@@ -55,7 +52,6 @@ export const createWordGroup = async (req, res) => {
   }
 };
 
-// GET /word-groups/:id
 export const getWordGroupById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -89,32 +85,12 @@ export const getWordGroupById = async (req, res) => {
   }
 };
 
-// PUT /word-groups/:id
 export const updateWordGroup = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description } = req.body;
+    const { name } = req.body;
 
-    const group = await WordGroup.findById(id);
-
-    if (!group) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy nhóm từ",
-      });
-    }
-
-    if (group.userId !== req.user.uid) {
-      return res.status(403).json({
-        success: false,
-        message: "Bạn không có quyền cập nhật nhóm từ này",
-      });
-    }
-
-    const updatedGroup = await WordGroup.update(id, {
-      name: name || group.name,
-      description: description !== undefined ? description : group.description,
-    });
+    const updatedGroup = await WordGroup.update(id, { name });
 
     res.status(200).json({
       success: true,
@@ -131,32 +107,16 @@ export const updateWordGroup = async (req, res) => {
   }
 };
 
-// DELETE /word-groups/:id
 export const deleteWordGroup = async (req, res) => {
   try {
     const { id } = req.params;
-    const group = await WordGroup.findById(id);
 
-    if (!group) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy nhóm từ",
-      });
-    }
+    const [words] = await Promise.all([
+      Word.findByGroupId(id),
+      WordGroup.delete(id),
+    ]);
 
-    if (group.userId !== req.user.uid) {
-      return res.status(403).json({
-        success: false,
-        message: "Bạn không có quyền xóa nhóm từ này",
-      });
-    }
-
-    const words = await Word.findByGroupId(id);
-    for (const word of words) {
-      await Word.delete(word.id);
-    }
-
-    await WordGroup.delete(id);
+    await Promise.all(words.map((word) => Word.delete(word.id)));
 
     res.status(200).json({
       success: true,
@@ -172,7 +132,6 @@ export const deleteWordGroup = async (req, res) => {
   }
 };
 
-// GET /word-groups/:id/words
 export const getWordsInGroup = async (req, res) => {
   try {
     const { id } = req.params;
@@ -208,112 +167,35 @@ export const getWordsInGroup = async (req, res) => {
   }
 };
 
-// POST /word-groups/:id/words
 export const addWordToGroup = async (req, res) => {
   try {
     const { id } = req.params;
-    const { term, definition, example, pronunciation } = req.body;
+    const { word, meaning, type } = req.body;
 
-    const group = await WordGroup.findById(id);
-
-    if (!group) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy nhóm từ",
-      });
-    }
-
-    if (group.userId !== req.user.uid) {
-      return res.status(403).json({
-        success: false,
-        message: "Bạn không có quyền thêm từ vào nhóm này",
-      });
-    }
-
-    if (!term || !definition) {
+    if (!word || !meaning) {
       return res.status(400).json({
         success: false,
-        message: "Từ và định nghĩa không được để trống",
+        message: "Từ và nghĩa không được để trống",
       });
     }
 
-    const word = await Word.create({
-      term,
-      definition,
-      example,
-      pronunciation,
+    const data = await Word.create({
+      word,
+      meaning,
+      type,
       groupId: id,
     });
 
     res.status(201).json({
       success: true,
       message: "Thêm từ vào nhóm thành công",
-      data: word,
+      data,
     });
   } catch (error) {
     console.error("Error adding word to group:", error);
     res.status(500).json({
       success: false,
       message: "Lỗi khi thêm từ vào nhóm",
-      error: error.message,
-    });
-  }
-};
-
-// POST /set-current-word
-export const setCurrentWord = async (req, res) => {
-  try {
-    const { word: wordId, group: groupId } = req.query;
-
-    if (!wordId || !groupId) {
-      return res.status(400).json({
-        success: false,
-        message: "Thiếu thông tin từ hoặc nhóm từ",
-      });
-    }
-
-    const group = await WordGroup.findById(groupId);
-    if (!group) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy nhóm từ",
-      });
-    }
-
-    if (group.userId !== req.user.uid) {
-      return res.status(403).json({
-        success: false,
-        message: "Bạn không có quyền cập nhật nhóm từ này",
-      });
-    }
-
-    const word = await Word.findById(wordId);
-    if (!word) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy từ",
-      });
-    }
-
-    if (word.groupId !== groupId) {
-      return res.status(400).json({
-        success: false,
-        message: "Từ này không thuộc nhóm từ đã chọn",
-      });
-    }
-
-    const updatedGroup = await WordGroup.setCurrentWord(groupId, wordId);
-
-    res.status(200).json({
-      success: true,
-      message: "Đã đặt từ hiện tại thành công",
-      data: updatedGroup,
-    });
-  } catch (error) {
-    console.error("Error setting current word:", error);
-    res.status(500).json({
-      success: false,
-      message: "Lỗi khi đặt từ hiện tại",
       error: error.message,
     });
   }

@@ -1,4 +1,4 @@
-import { db } from "../config/firebase.js";
+import { admin, db } from "../config/firebase.js";
 
 const usersCollection = db.collection("users");
 
@@ -21,7 +21,7 @@ class User {
       uid: userData.uid,
       email: userData.email,
       name: userData.name,
-      createdAt: new Date().toISOString(),
+      createdAt: admin.firestore.Timestamp.now(),
     });
 
     return {

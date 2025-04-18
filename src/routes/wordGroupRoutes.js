@@ -7,7 +7,6 @@ import {
   deleteWordGroup,
   getWordsInGroup,
   addWordToGroup,
-  setCurrentWord,
 } from "../controllers/wordGroupController.js";
 import { verifyFirebaseToken } from "../middleware/authMiddleware.js";
 
@@ -22,7 +21,5 @@ router.put("/:id", updateWordGroup);
 router.delete("/:id", deleteWordGroup);
 router.get("/:id/words", getWordsInGroup);
 router.post("/:id/words", addWordToGroup);
-
-router.post("/set-current-word", setCurrentWord);
 
 export default router;

@@ -1,95 +1,27 @@
 import Word from "../models/Word.js";
 import WordGroup from "../models/WordGroup.js";
 
-// GET /words/:id
-export const getWordById = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const word = await Word.findById(id);
-
-    if (!word) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy từ",
-      });
-    }
-
-    const group = await WordGroup.findById(word.groupId);
-    if (!group) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy nhóm từ liên quan",
-      });
-    }
-
-    if (group.userId !== req.user.uid) {
-      return res.status(403).json({
-        success: false,
-        message: "Bạn không có quyền truy cập từ này",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: word,
-    });
-  } catch (error) {
-    console.error("Error getting word:", error);
-    res.status(500).json({
-      success: false,
-      message: "Lỗi khi lấy thông tin từ",
-      error: error.message,
-    });
-  }
-};
-
 export const updateWord = async (req, res) => {
   try {
     const { id } = req.params;
-    const { term, definition, example, pronunciation, status } = req.body;
-
-    const word = await Word.findById(id);
-    if (!word) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy từ",
-      });
-    }
-
-    const group = await WordGroup.findById(word.groupId);
-    if (!group) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy nhóm từ liên quan",
-      });
-    }
-
-    if (group.userId !== req.user.uid) {
-      return res.status(403).json({
-        success: false,
-        message: "Bạn không có quyền cập nhật từ này",
-      });
-    }
-
-    if (status && status !== word.status) {
-      if (status === "learned" && word.status !== "learned") {
-        await Word.markAsLearned(id);
-      } else {
-        await Word.update(id, { status });
-      }
-    }
+    const { word, meaning, type, status } = req.body;
 
     const updatedData = {};
-    if (term) updatedData.term = term;
-    if (definition) updatedData.definition = definition;
-    if (example !== undefined) updatedData.example = example;
-    if (pronunciation !== undefined) updatedData.pronunciation = pronunciation;
 
-    if (Object.keys(updatedData).length > 0) {
-      await Word.update(id, updatedData);
+    if (word) updatedData.word = word;
+    if (meaning) updatedData.meaning = meaning;
+    if (type) updatedData.type = type;
+    if (status) updatedData.status = status;
+
+    const updatedWord = await Word.update(id, updatedData);
+
+    if (status) {
+      const group = await WordGroup.findById(updatedWord.groupId);
+
+      await WordGroup.update(updatedWord.groupId, {
+        learnedWords: group.learnedWords + (status === "active" ? 1 : -1),
+      });
     }
-
-    const updatedWord = await Word.findById(id);
 
     res.status(200).json({
       success: true,
@@ -106,41 +38,20 @@ export const updateWord = async (req, res) => {
   }
 };
 
-// DELETE /words/:id
 export const deleteWord = async (req, res) => {
   try {
     const { id } = req.params;
     const word = await Word.findById(id);
 
-    if (!word) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy từ",
-      });
-    }
-
     const group = await WordGroup.findById(word.groupId);
-    if (!group) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy nhóm từ liên quan",
-      });
-    }
 
-    if (group.userId !== req.user.uid) {
-      return res.status(403).json({
-        success: false,
-        message: "Bạn không có quyền xóa từ này",
-      });
-    }
-
-    if (group.progress && group.progress.currentWordId === id) {
-      await WordGroup.update(word.groupId, {
-        "progress.currentWordId": null,
-      });
-    }
-
-    await Word.delete(id);
+    await Promise.all([
+      WordGroup.update(word.groupId, {
+        totalWords: group.totalWords - 1,
+        learnedWords: group.learnedWords - (word.status === "active" ? 1 : 0),
+      }),
+      Word.delete(id),
+    ]);
 
     res.status(200).json({
       success: true,
@@ -151,58 +62,6 @@ export const deleteWord = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Lỗi khi xóa từ",
-      error: error.message,
-    });
-  }
-};
-
-// POST /words/:id/timeout
-export const timeoutWord = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { hours } = req.body;
-
-    const word = await Word.findById(id);
-    if (!word) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy từ",
-      });
-    }
-
-    const group = await WordGroup.findById(word.groupId);
-    if (!group) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy nhóm từ liên quan",
-      });
-    }
-
-    if (group.userId !== req.user.uid) {
-      return res.status(403).json({
-        success: false,
-        message: "Bạn không có quyền cập nhật từ này",
-      });
-    }
-
-    const timedOutWord = await Word.setTimeout(id, hours || 24);
-
-    if (group.progress && group.progress.currentWordId === id) {
-      await WordGroup.update(word.groupId, {
-        "progress.currentWordId": null,
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Đặt timeout cho từ thành công",
-      data: timedOutWord,
-    });
-  } catch (error) {
-    console.error("Error setting timeout for word:", error);
-    res.status(500).json({
-      success: false,
-      message: "Lỗi khi đặt timeout cho từ",
       error: error.message,
     });
   }

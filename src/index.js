@@ -4,6 +4,7 @@ import authRoutes from "./routes/authRoutes.js";
 import iotRoutes from "./routes/iotRoutes.js";
 import wordGroupRoutes from "./routes/wordGroupRoutes.js";
 import wordRoutes from "./routes/wordRoutes.js";
+import progressRoutes from "./routes/progressRoutes.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -18,6 +19,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/iot", iotRoutes);
 app.use("/api/word-groups", wordGroupRoutes);
 app.use("/api/words", wordRoutes);
+app.use("/api/progress", progressRoutes);
 
 app.get("/", (req, res) => {
   res.json({

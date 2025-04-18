@@ -1,12 +1,11 @@
 import express from "express";
-import { updateWord, deleteWord } from "../controllers/wordController.js";
 import { verifyFirebaseToken } from "../middleware/authMiddleware.js";
+import { getProgress } from "../controllers/progressController.js";
 
 const router = express.Router();
 
 router.use(verifyFirebaseToken);
 
-router.put("/:id", updateWord);
-router.delete("/:id", deleteWord);
+router.get("/", getProgress);
 
 export default router;
