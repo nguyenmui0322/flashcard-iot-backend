@@ -20,6 +20,9 @@ const iotAuth = async (req, res, next) => {
       });
     }
 
+    const userId = await ApiKey.getUserIdFromKey(apiKey);
+    req.userId = userId;
+
     next();
   } catch (error) {
     console.error("API key validation error:", error);

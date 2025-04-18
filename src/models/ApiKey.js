@@ -12,6 +12,20 @@ class ApiKey {
     return !snapshot.empty;
   }
 
+  static async getUserIdFromKey(apiKey) {
+    const snapshot = await apiKeysCollection
+      .where("key", "==", apiKey)
+      .where("isActive", "==", true)
+      .get();
+
+    if (snapshot.empty) {
+      return null;
+    }
+
+    const apiKeyData = snapshot.docs[0].data();
+    return apiKeyData.createdBy;
+  }
+
   static async createKey(keyData) {
     const apiKeyRef = await apiKeysCollection.add({
       key: keyData.key,
