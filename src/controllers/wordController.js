@@ -14,7 +14,6 @@ export const getWordById = async (req, res) => {
       });
     }
 
-    // Get the group to check ownership
     const group = await WordGroup.findById(word.groupId);
     if (!group) {
       return res.status(404).json({
@@ -23,7 +22,6 @@ export const getWordById = async (req, res) => {
       });
     }
 
-    // Check if user owns the group that contains this word
     if (group.userId !== req.user.uid) {
       return res.status(403).json({
         success: false,
@@ -45,7 +43,6 @@ export const getWordById = async (req, res) => {
   }
 };
 
-// PUT /words/:id
 export const updateWord = async (req, res) => {
   try {
     const { id } = req.params;
@@ -59,7 +56,6 @@ export const updateWord = async (req, res) => {
       });
     }
 
-    // Get the group to check ownership
     const group = await WordGroup.findById(word.groupId);
     if (!group) {
       return res.status(404).json({
@@ -68,7 +64,6 @@ export const updateWord = async (req, res) => {
       });
     }
 
-    // Check if user owns the group that contains this word
     if (group.userId !== req.user.uid) {
       return res.status(403).json({
         success: false,
@@ -76,7 +71,6 @@ export const updateWord = async (req, res) => {
       });
     }
 
-    // Update learned status if changing status
     if (status && status !== word.status) {
       if (status === "learned" && word.status !== "learned") {
         await Word.markAsLearned(id);
@@ -125,7 +119,6 @@ export const deleteWord = async (req, res) => {
       });
     }
 
-    // Get the group to check ownership
     const group = await WordGroup.findById(word.groupId);
     if (!group) {
       return res.status(404).json({
@@ -134,7 +127,6 @@ export const deleteWord = async (req, res) => {
       });
     }
 
-    // Check if user owns the group that contains this word
     if (group.userId !== req.user.uid) {
       return res.status(403).json({
         success: false,
@@ -142,7 +134,6 @@ export const deleteWord = async (req, res) => {
       });
     }
 
-    // Check if this word is currently selected in the group
     if (group.progress && group.progress.currentWordId === id) {
       await WordGroup.update(word.groupId, {
         "progress.currentWordId": null,
@@ -179,7 +170,6 @@ export const timeoutWord = async (req, res) => {
       });
     }
 
-    // Get the group to check ownership
     const group = await WordGroup.findById(word.groupId);
     if (!group) {
       return res.status(404).json({
@@ -188,7 +178,6 @@ export const timeoutWord = async (req, res) => {
       });
     }
 
-    // Check if user owns the group that contains this word
     if (group.userId !== req.user.uid) {
       return res.status(403).json({
         success: false,
@@ -196,10 +185,8 @@ export const timeoutWord = async (req, res) => {
       });
     }
 
-    // Set timeout for the word
     const timedOutWord = await Word.setTimeout(id, hours || 24);
 
-    // If this word is currently selected, set current word to null
     if (group.progress && group.progress.currentWordId === id) {
       await WordGroup.update(word.groupId, {
         "progress.currentWordId": null,

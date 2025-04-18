@@ -9,13 +9,13 @@ Hệ thống hỗ trợ hai phương thức xác thực khác nhau:
 ### 1. Xác thực người dùng Web (Firebase Authentication)
 
 - Frontend sử dụng Firebase Authentication để đăng nhập/đăng ký
-- JWT token được gửi đến backend trong header Authorization
+- IdToken được gửi đến backend trong header Authorization
 - Ví dụ:
 
 ```js
-fetch("http://localhost:3000/api/auth/login", {
+fetch("http://localhost:3000/api/word-groups", {
   headers: {
-    Authorization: "Bearer <JWT_TOKEN>",
+    Authorization: "Bearer IdToken",
   },
 });
 ```
@@ -31,7 +31,7 @@ fetch("http://localhost:3000/api/auth/login", {
 
 HTTPClient http;
 http.begin("http://your-server.com/api/iot/flashcards");
-http.addHeader("x-api-key", "abc");
+http.addHeader("x-api-key", "IdToken");
 int httpCode = http.GET();
 String payload = http.getString();
 http.end();
@@ -48,4 +48,3 @@ http.end();
 ### API cho người dùng Web
 
 - `POST /api/auth/register` - Đăng ký tài khoản
-- `POST /api/auth/login` - Đăng nhập

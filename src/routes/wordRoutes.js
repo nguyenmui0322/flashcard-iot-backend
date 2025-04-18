@@ -9,10 +9,8 @@ import { verifyFirebaseToken } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// Apply authentication middleware to all routes
 router.use(verifyFirebaseToken);
 
-// Word routes
 router.get("/:id", getWordById);
 router.put("/:id", updateWord);
 router.delete("/:id", deleteWord);

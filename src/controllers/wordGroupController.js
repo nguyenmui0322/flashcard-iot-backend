@@ -68,7 +68,6 @@ export const getWordGroupById = async (req, res) => {
       });
     }
 
-    // Check if user owns this group
     if (group.userId !== req.user.uid) {
       return res.status(403).json({
         success: false,
@@ -105,7 +104,6 @@ export const updateWordGroup = async (req, res) => {
       });
     }
 
-    // Check if user owns this group
     if (group.userId !== req.user.uid) {
       return res.status(403).json({
         success: false,
@@ -146,7 +144,6 @@ export const deleteWordGroup = async (req, res) => {
       });
     }
 
-    // Check if user owns this group
     if (group.userId !== req.user.uid) {
       return res.status(403).json({
         success: false,
@@ -154,7 +151,6 @@ export const deleteWordGroup = async (req, res) => {
       });
     }
 
-    // Get all words in this group and delete them
     const words = await Word.findByGroupId(id);
     for (const word of words) {
       await Word.delete(word.id);
@@ -189,7 +185,6 @@ export const getWordsInGroup = async (req, res) => {
       });
     }
 
-    // Check if user owns this group
     if (group.userId !== req.user.uid) {
       return res.status(403).json({
         success: false,
@@ -228,7 +223,6 @@ export const addWordToGroup = async (req, res) => {
       });
     }
 
-    // Check if user owns this group
     if (group.userId !== req.user.uid) {
       return res.status(403).json({
         success: false,
@@ -286,7 +280,6 @@ export const setCurrentWord = async (req, res) => {
       });
     }
 
-    // Check if user owns this group
     if (group.userId !== req.user.uid) {
       return res.status(403).json({
         success: false,

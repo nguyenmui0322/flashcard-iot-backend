@@ -1,6 +1,6 @@
-import ApiKey from "../models/ApiKey.js";
+import User from "../models/User.js";
 
-const iotAuth = async (req, res, next) => {
+const iotAuthMiddleware = async (req, res, next) => {
   const apiKey = req.headers["x-api-key"];
 
   if (!apiKey) {
@@ -11,7 +11,7 @@ const iotAuth = async (req, res, next) => {
   }
 
   try {
-    const isValid = await ApiKey.isValidKey(apiKey);
+    const isValid = await User.findByUid(apiKey);
 
     if (!isValid) {
       return res.status(403).json({
@@ -20,8 +20,9 @@ const iotAuth = async (req, res, next) => {
       });
     }
 
-    const userId = await ApiKey.getUserIdFromKey(apiKey);
-    req.userId = userId;
+    req.user = {
+      uid: apiKey,
+    };
 
     next();
   } catch (error) {
@@ -33,4 +34,4 @@ const iotAuth = async (req, res, next) => {
   }
 };
 
-export default iotAuth;
+export default iotAuthMiddleware;

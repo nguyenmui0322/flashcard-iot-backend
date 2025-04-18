@@ -39,7 +39,6 @@ class Word {
       updatedAt: new Date().toISOString(),
     };
 
-    // Update the word count in the group
     const groupRef = db.collection("wordGroups").doc(wordData.groupId);
     const groupDoc = await groupRef.get();
 
@@ -74,7 +73,6 @@ class Word {
     const word = await this.findById(id);
     if (!word) return null;
 
-    // Update the word count in the group
     const groupRef = db.collection("wordGroups").doc(word.groupId);
     const groupDoc = await groupRef.get();
 
@@ -115,7 +113,6 @@ class Word {
     const word = await this.findById(id);
     if (!word) return null;
 
-    // Update the learned count in the group
     if (word.status !== "learned") {
       const groupRef = db.collection("wordGroups").doc(word.groupId);
       const groupDoc = await groupRef.get();

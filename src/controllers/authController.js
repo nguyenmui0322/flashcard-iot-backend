@@ -2,17 +2,17 @@ import User from "../models/User.js";
 
 export const register = async (req, res) => {
   try {
-    const { uid, email, password, name } = req.body;
+    const { uid, email, name } = req.body;
 
-    const existingUser = await User.findByEmail(email);
+    const existingUser = await User.findByUid(uid);
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: "Email đã được sử dụng",
+        message: "Tài khoản đã tồn tại",
       });
     }
 
-    const user = await User.create({ uid, email, password, name });
+    const user = await User.create({ uid, email, name });
 
     res.status(201).json({
       success: true,
