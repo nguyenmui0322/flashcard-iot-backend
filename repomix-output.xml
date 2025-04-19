@@ -1,0 +1,1876 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+<additional_info>
+
+</additional_info>
+
+</file_summary>
+
+<directory_structure>
+.env.example
+.gitignore
+package.json
+src/config/azure.js
+src/config/firebase.js
+src/controllers/authController.js
+src/controllers/bluetoothPairingController.js
+src/controllers/iotController.js
+src/controllers/progressController.js
+src/controllers/wordController.js
+src/controllers/wordGroupController.js
+src/index.js
+src/middleware/authMiddleware.js
+src/middleware/errorMiddleware.js
+src/middleware/iotAuthMiddleware.js
+src/models/Device.js
+src/models/User.js
+src/models/Word.js
+src/models/WordGroup.js
+src/routes/authRoutes.js
+src/routes/bluetoothRoutes.js
+src/routes/iotRoutes.js
+src/routes/progressRoutes.js
+src/routes/wordGroupRoutes.js
+src/routes/wordRoutes.js
+src/services/pronunciationService.js
+src/utils/pronunciationScraper.js
+src/utils/wordTimeoutManager.js
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path=".env.example">
+# Firebase credentials
+FIREBASE_TYPE=
+FIREBASE_PROJECT_ID=
+FIREBASE_PRIVATE_KEY_ID=
+FIREBASE_PRIVATE_KEY=
+FIREBASE_CLIENT_EMAIL=
+FIREBASE_CLIENT_ID=
+FIREBASE_AUTH_URI=
+FIREBASE_TOKEN_URI=
+FIREBASE_AUTH_PROVIDER_X509_CERT_URL=
+FIREBASE_CLIENT_X509_CERT_URL=
+
+# Server configuration
+PORT=5000
+
+# Azure Speech Service credentials
+AZURE_SPEECH_KEY=your_azure_speech_key
+AZURE_SPEECH_REGION=your_azure_region
+</file>
+
+<file path="src/config/azure.js">
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+// Check if Azure Speech API credentials are configured
+const subscriptionKey = process.env.AZURE_SPEECH_KEY;
+const region = process.env.AZURE_SPEECH_REGION;
+
+if (!subscriptionKey || !region) {
+  console.warn('⚠️ WARNING: Azure Speech Service credentials are not properly configured!');
+  console.warn(`AZURE_SPEECH_KEY: ${subscriptionKey ? 'Configured' : 'Missing'}`);
+  console.warn(`AZURE_SPEECH_REGION: ${region ? 'Configured' : 'Missing'}`);
+  console.warn('Please make sure to set these variables in your .env file');
+}
+
+export const azureSpeechConfig = {
+  subscriptionKey: subscriptionKey,
+  region: region,
+  language: "en-US",
+  // Additional pronunciation assessment parameters
+  assessmentParams: {
+    referenceText: '', // Will be set per request
+    gradingSystem: 'HundredMark',
+    granularity: 'Phoneme',
+    enableMiscue: true,
+    scenarioId: 'englishPronunciationAssessment'
+  }
+};
+</file>
+
+<file path="src/controllers/bluetoothPairingController.js">
+import User from '../models/User.js';
+import Device from '../models/Device.js';
+import { v4 as uuidv4 } from 'uuid';
+
+// Controller for handling the Bluetooth pairing process
+export const pairDevice = async (req, res) => {
+  try {
+    const { userId, wifiSSID, wifiPassword } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required"
+      });
+    }
+
+    // Verify that the user exists
+    const user = await User.findByUid(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Return the user's UID as the token along with WiFi information
+    res.status(200).json({
+      success: true,
+      message: "Device paired successfully",
+      token: userId, // The token is simply the user's UID
+      wifiSSID,
+      wifiPassword
+    });
+  } catch (error) {
+    console.error("Bluetooth pairing error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error during device pairing"
+    });
+  }
+};
+
+// Controller for factory reset functionality
+export const factoryReset = async (req, res) => {
+  try {
+    const { deviceId } = req.body;
+
+    if (!deviceId) {
+      return res.status(400).json({
+        success: false,
+        message: "Device ID is required"
+      });
+    }
+
+    // Find the device
+    const device = await Device.findByDeviceId(deviceId);
+    if (!device) {
+      return res.status(404).json({
+        success: false,
+        message: "Device not found"
+      });
+    }
+
+    // Delete the device record
+    const deleted = await Device.deleteDevice(deviceId);
+    
+    if (!deleted) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to reset device"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Device has been factory reset"
+    });
+  } catch (error) {
+    console.error("Factory reset error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error during factory reset"
+    });
+  }
+};
+</file>
+
+<file path="src/middleware/errorMiddleware.js">
+/**
+ * Error handling middleware
+ */
+
+export const errorHandler = (err, req, res, next) => {
+  console.error('Error caught by middleware:', err);
+  
+  // Handle Multer errors
+  if (err.name === 'MulterError') {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        message: 'File size exceeds the 5MB limit',
+      });
+    }
+    
+    return res.status(400).json({
+      success: false,
+      message: `File upload error: ${err.message}`,
+    });
+  }
+  
+  // Handle other errors
+  const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+  
+  res.status(statusCode).json({
+    success: false,
+    message: err.message || 'Internal server error',
+    stack: process.env.NODE_ENV === 'production' ? null : err.stack,
+  });
+};
+</file>
+
+<file path="src/models/Device.js">
+import { admin, db } from "../config/firebase.js";
+
+const devicesCollection = db.collection("devices");
+
+class Device {
+  static async findByDeviceId(deviceId) {
+    const snapshot = await devicesCollection.where("deviceId", "==", deviceId).get();
+    if (snapshot.empty) {
+      return null;
+    }
+
+    const deviceData = snapshot.docs[0].data();
+    return {
+      id: snapshot.docs[0].id,
+      ...deviceData,
+    };
+  }
+
+  static async findByToken(token) {
+    const snapshot = await devicesCollection.where("token", "==", token).get();
+    if (snapshot.empty) {
+      return null;
+    }
+
+    const deviceData = snapshot.docs[0].data();
+    return {
+      id: snapshot.docs[0].id,
+      ...deviceData,
+    };
+  }
+
+  static async create(deviceData) {
+    const deviceRef = await devicesCollection.add({
+      deviceId: deviceData.deviceId,
+      userId: deviceData.userId,
+      token: deviceData.token,
+      wifiSSID: deviceData.wifiSSID || null,
+      wifiPassword: deviceData.wifiPassword || null,
+      createdAt: admin.firestore.Timestamp.now(),
+    });
+
+    return {
+      id: deviceRef.id,
+      deviceId: deviceData.deviceId,
+      userId: deviceData.userId,
+      token: deviceData.token,
+      wifiSSID: deviceData.wifiSSID,
+      wifiPassword: deviceData.wifiPassword,
+    };
+  }
+
+  static async updateWifiCredentials(deviceId, wifiSSID, wifiPassword) {
+    const snapshot = await devicesCollection.where("deviceId", "==", deviceId).get();
+    if (snapshot.empty) {
+      return null;
+    }
+
+    const deviceRef = snapshot.docs[0].ref;
+    await deviceRef.update({
+      wifiSSID,
+      wifiPassword,
+      updatedAt: admin.firestore.Timestamp.now(),
+    });
+
+    return {
+      id: deviceRef.id,
+      deviceId: deviceId,
+      wifiSSID,
+      wifiPassword,
+    };
+  }
+
+  static async deleteDevice(deviceId) {
+    const snapshot = await devicesCollection.where("deviceId", "==", deviceId).get();
+    if (snapshot.empty) {
+      return false;
+    }
+
+    await snapshot.docs[0].ref.delete();
+    return true;
+  }
+}
+
+export default Device;
+</file>
+
+<file path="src/routes/bluetoothRoutes.js">
+import express from "express";
+import { pairDevice } from "../controllers/bluetoothPairingController.js";
+
+const router = express.Router();
+
+// Route for pairing a device via Bluetooth
+router.post("/pair", pairDevice);
+
+export default router;
+</file>
+
+<file path="src/services/pronunciationService.js">
+import { azureSpeechConfig } from "../config/azure.js";
+import * as sdk from "microsoft-cognitiveservices-speech-sdk";
+import { Buffer } from "buffer";
+
+/**
+ * Assess pronunciation using Azure Speech Services SDK
+ * @param {string} word - The word to assess pronunciation for
+ * @param {Buffer} audioBuffer - The audio file buffer containing the pronunciation
+ * @returns {Object} - Assessment results including accuracy score
+ */
+export const assessPronunciation = async (word, audioBuffer) => {
+  try {
+    console.log(`Starting pronunciation assessment for word: "${word}"`);
+    
+    const { subscriptionKey, region } = azureSpeechConfig;
+    
+    // Debug Azure configuration
+    console.log(`Azure config - Region: ${region}`);
+    console.log(`Subscription key configured: ${subscriptionKey ? 'Yes' : 'No'}`);
+    
+    if (!subscriptionKey || !region) {
+      throw new Error("Azure Speech Service credentials not configured");
+    }
+    
+    // Debug audio buffer
+    console.log(`Audio buffer received: ${audioBuffer ? 'Yes' : 'No'}, Size: ${audioBuffer ? audioBuffer.length : 0} bytes`);
+    
+    if (!audioBuffer || audioBuffer.length === 0) {
+      throw new Error("Empty or invalid audio buffer received");
+    }
+    
+    // Create the pronunciation assessment config
+    const pronunciationAssessmentConfig = new sdk.PronunciationAssessmentConfig(
+      word,
+      sdk.PronunciationAssessmentGradingSystem.HundredMark,
+      sdk.PronunciationAssessmentGranularity.Phoneme,
+      true
+    );
+    
+    // Create the push stream
+    const pushStream = sdk.AudioInputStream.createPushStream();
+    
+    // Push the audio data to the stream
+    pushStream.write(audioBuffer);
+    pushStream.close();
+    
+    // Create the audio config from the push stream
+    const audioConfig = sdk.AudioConfig.fromStreamInput(pushStream);
+    
+    // Create the speech config
+    const speechConfig = sdk.SpeechConfig.fromSubscription(subscriptionKey, region);
+    speechConfig.speechRecognitionLanguage = "en-US";
+    
+    // Create the speech recognizer
+    const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig);
+    
+    // Apply the pronunciation assessment config to the recognizer
+    pronunciationAssessmentConfig.applyTo(recognizer);
+    
+    console.log("Starting pronunciation assessment with Speech SDK...");
+    
+    // Create a promise to handle the recognition result
+    return new Promise((resolve, reject) => {
+      // Handle the recognition result
+      recognizer.recognizeOnceAsync(
+        async (result) => {
+          console.log(`Recognition result received: ${result.text}`);
+          
+          // Get the pronunciation assessment result
+          const pronunciationAssessmentResult = sdk.PronunciationAssessmentResult.fromResult(result);
+          console.log("Pronunciation assessment result received");
+          
+          const assessmentResult = {
+            accuracyScore: pronunciationAssessmentResult.accuracyScore,
+            fluencyScore: pronunciationAssessmentResult.fluencyScore,
+            completenessScore: pronunciationAssessmentResult.completenessScore,
+            pronunciationScore: pronunciationAssessmentResult.pronunciationScore,
+            recognizedText: result.text || word
+          };
+          
+          console.log("Assessment results:", JSON.stringify(assessmentResult, null, 2));
+          
+          // Close the recognizer
+          recognizer.close();
+          
+          resolve(assessmentResult);
+        },
+        (error) => {
+          console.error("Error during recognition:", error);
+          
+          // Close the recognizer
+          recognizer.close();
+          
+          reject(error);
+        }
+      );
+    });
+  } catch (error) {
+    console.error("Error in pronunciation assessment:", error);
+    throw error;
+  }
+};
+</file>
+
+<file path="src/utils/pronunciationScraper.js">
+import axios from 'axios';
+import * as cheerio from 'cheerio';
+
+/**
+ * Scrapes Cambridge Dictionary to get the US pronunciation audio URL for a word
+ * @param {string} word - The English word to get pronunciation for
+ * @returns {Promise<string|null>} - URL of the audio file or null if not found
+ */
+export const getUSPronunciationURL = async (word) => {
+  try {
+    const formattedWord = word.trim().toLowerCase().replace(/\s+/g, '-');
+    const url = `https://dictionary.cambridge.org/dictionary/english/${formattedWord}`;
+    
+    console.log(`Fetching pronunciation for "${word}" from ${url}`);
+    
+    // Fetch the dictionary page
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+    
+    // Load the HTML into cheerio
+    const $ = cheerio.load(response.data);
+    
+    // Find US pronunciation audio
+    // Look for elements with 'us dpron-i' class, then find audio source with 'audio/mpeg' type
+    let audioUrl = null;
+    
+    // First try finding the span with 'us dpron-i' class
+    $('.us.dpron-i').each((index, element) => {
+      // Find the audio element
+      const audio = $(element).find('audio.hdn');
+      if (audio.length > 0) {
+        // Look for the source with type 'audio/mpeg'
+        const source = $(audio).find('source[type="audio/mpeg"]');
+        if (source.length > 0) {
+          const srcPath = $(source).attr('src');
+          if (srcPath) {
+            audioUrl = `https://dictionary.cambridge.org${srcPath}`;
+            return false; // Break the loop when found
+          }
+        }
+      }
+    });
+    
+    // If not found, try looking at audio elements with US pronunciation directly
+    if (!audioUrl) {
+      $('audio').each((index, element) => {
+        const id = $(element).attr('id');
+        // Check if it's a US pronunciation audio element
+        if (id && id.includes('us_pron')) {
+          const source = $(element).find('source[type="audio/mpeg"]');
+          if (source.length > 0) {
+            const srcPath = $(source).attr('src');
+            if (srcPath) {
+              audioUrl = `https://dictionary.cambridge.org${srcPath}`;
+              return false; // Break the loop when found
+            }
+          }
+        }
+      });
+    }
+    
+    if (audioUrl) {
+      console.log(`Found pronunciation URL for "${word}": ${audioUrl}`);
+      return audioUrl;
+    } else {
+      console.log(`No pronunciation found for "${word}"`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`Error fetching pronunciation for "${word}":`, error);
+    return null;
+  }
+};
+</file>
+
+<file path="src/utils/wordTimeoutManager.js">
+import { db, admin } from "../config/firebase.js";
+
+/**
+ * Scan for timed-out words and reactivate them if the timeout period has passed
+ */
+export const reactivateTimedOutWords = async () => {
+  try {
+    console.log("Scanning for timed-out words to reactivate...");
+    
+    // Use server timestamp
+    const now = admin.firestore.Timestamp.now();
+    
+    // Query for words that are currently timed out
+    const wordsRef = db.collection('words');
+    const timedOutWordsQuery = await wordsRef
+      .where('status', '==', 'timeout')
+      .get();
+    
+    if (timedOutWordsQuery.empty) {
+      console.log("No timed-out words found");
+      return 0;
+    }
+    
+    // Array to hold batch operations
+    const batch = db.batch();
+    let reactivatedCount = 0;
+    
+    timedOutWordsQuery.forEach((doc) => {
+      const wordData = doc.data();
+      
+      // Check if the word has a timeoutUntil timestamp
+      if (wordData.timeoutUntil) {
+        // Compare timestamps directly if they're Firestore timestamps
+        if (now.seconds >= wordData.timeoutUntil.seconds) {
+          console.log(`Reactivating word: ${wordData.word} (ID: ${doc.id})`);
+          
+          // Update the word document to remove timeout
+          batch.update(doc.ref, {
+            status: 'active',
+            timeoutUntil: null,
+            lastReactivatedAt: now
+          });
+          
+          reactivatedCount++;
+        }
+      } else {
+        // If there's no timeoutUntil field but the word is marked as timed out,
+        // reactivate it (handles potential data inconsistency)
+        console.log(`Reactivating word with no timeout date: ${wordData.word} (ID: ${doc.id})`);
+        
+        batch.update(doc.ref, {
+          status: 'active',
+          timeoutUntil: null,
+          lastReactivatedAt: now
+        });
+        
+        reactivatedCount++;
+      }
+    });
+    
+    // Commit the batch if we have updates to make
+    if (reactivatedCount > 0) {
+      await batch.commit();
+      console.log(`Successfully reactivated ${reactivatedCount} words`);
+    } else {
+      console.log("No words need reactivation at this time");
+    }
+    
+    return reactivatedCount;
+  } catch (error) {
+    console.error("Error reactivating timed-out words:", error);
+    throw error;
+  }
+};
+
+/**
+ * Schedule a job to regularly check for and reactivate timed-out words
+ * @param {number} intervalMinutes - How often to run the check (in minutes)
+ */
+export const scheduleWordTimeoutCheck = (intervalMinutes = 15) => {
+  console.log(`Scheduling word timeout check every ${intervalMinutes} minutes`);
+  
+  // Initial run immediately after server starts
+  reactivateTimedOutWords().catch(err => 
+    console.error("Error in initial timeout check:", err)
+  );
+  
+  // Convert minutes to milliseconds for setInterval
+  const intervalMs = intervalMinutes * 60 * 1000;
+  
+  // Set up the recurring job
+  const intervalId = setInterval(() => {
+    reactivateTimedOutWords().catch(err => 
+      console.error("Error in scheduled timeout check:", err)
+    );
+  }, intervalMs);
+  
+  return intervalId;
+};
+
+/**
+ * Set a timeout for a specific word
+ * @param {string} wordId - The ID of the word to time out
+ * @param {number} timeoutMinutes - Duration of timeout in minutes
+ */
+export const timeoutWord = async (wordId, timeoutMinutes = 60) => {
+  try {
+    const wordRef = db.collection('words').doc(wordId);
+    const wordDoc = await wordRef.get();
+    
+    if (!wordDoc.exists) {
+      throw new Error(`Word with ID ${wordId} not found`);
+    }
+    
+    // Use server timestamp for current time
+    const now = admin.firestore.Timestamp.now();
+    
+    // Calculate the future timestamp when timeout should end
+    // We need to add the minutes in seconds to the current timestamp
+    const secondsToAdd = timeoutMinutes * 60;
+    const timeoutUntil = new admin.firestore.Timestamp(
+      now.seconds + secondsToAdd,
+      now.nanoseconds
+    );
+    
+    await wordRef.update({
+      status: 'timeout',
+      timeoutUntil: timeoutUntil,
+    });
+    
+    return {
+      success: true,
+      message: `Word timed out for ${timeoutMinutes} minutes using server time`,
+      timeoutUntil: timeoutUntil
+    };
+  } catch (error) {
+    console.error(`Error timing out word ${wordId}:`, error);
+    throw error;
+  }
+};
+</file>
+
+<file path=".gitignore">
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/build
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# service account key
+src/config/serviceAccountKey.json
+</file>
+
+<file path="src/config/firebase.js">
+import admin from "firebase-admin";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+import fs from "fs";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const serviceAccountPath = join(__dirname, "serviceAccountKey.json");
+const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
+const db = admin.firestore();
+
+export { admin, db };
+</file>
+
+<file path="src/controllers/iotController.js">
+import { db } from "../config/firebase.js";
+import { timeoutWord } from "../utils/wordTimeoutManager.js";
+import { assessPronunciation } from "../services/pronunciationService.js";
+import multer from "multer";
+import fs from "fs";
+import path from "path";
+
+// Create multer storage configuration
+export const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    console.log(`Received file: ${file.originalname}, MIME type: ${file.mimetype}`);
+    
+    // Check file type
+    if (file.mimetype === 'audio/wav' || 
+        file.mimetype === 'audio/wave' || 
+        file.mimetype === 'audio/x-wav' || 
+        file.originalname.endsWith('.wav')) {
+      cb(null, true);
+    } else {
+      console.error(`Rejected file: ${file.originalname} with MIME type: ${file.mimetype}`);
+      cb(new Error('Only .wav audio files are allowed'), false);
+    }
+  }
+});
+
+// Get word groups for the user
+export const getWordGroups = async (req, res) => {
+  try {
+    // Get user ID from the authenticated user
+    const { uid } = req.user;
+    
+    // Query the word groups collection
+    const wordGroupsRef = db.collection('wordGroups');
+    const querySnapshot = await wordGroupsRef.where('userId', '==', uid).get();
+    
+    const wordGroups = [];
+    querySnapshot.forEach(doc => {
+      const data = doc.data();
+      let createdAt = new Date();
+      
+      // Safely handle the createdAt field to avoid the toDate error
+      if (data.createdAt) {
+        if (typeof data.createdAt.toDate === 'function') {
+          createdAt = data.createdAt.toDate();
+        } else if (data.createdAt instanceof Date) {
+          createdAt = data.createdAt;
+        } else {
+          // Handle string or timestamp number
+          createdAt = new Date(data.createdAt);
+        }
+      }
+      
+      wordGroups.push({
+        id: doc.id,
+        name: data.name
+      });
+    });
+    
+    res.status(200).json(wordGroups);
+  } catch (error) {
+    console.error("Error getting word groups:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error retrieving word groups",
+      error: error.message
+    });
+  }
+};
+
+// Get words in a specific group
+export const getWordsInGroup = async (req, res) => {
+  try {
+    // Get user ID from the authenticated user
+    const { uid } = req.user;
+    
+    // Get group ID from the request parameters
+    const { groupId } = req.params;
+    
+    if (!groupId) {
+      return res.status(400).json({
+        success: false,
+        message: "Group ID is required"
+      });
+    }
+    
+    // First verify the group exists and belongs to the user
+    const groupRef = db.collection('wordGroups').doc(groupId);
+    const groupDoc = await groupRef.get();
+    
+    if (!groupDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Word group not found"
+      });
+    }
+    
+    const groupData = groupDoc.data();
+    if (groupData.userId !== uid) {
+      return res.status(403).json({
+        success: false,
+        message: "You don't have access to this word group"
+      });
+    }
+    
+    // Query the words collection for active words in this group
+    const wordsRef = db.collection('words');
+    const querySnapshot = await wordsRef
+      .where('groupId', '==', groupId)
+      .where('status', '==', 'active')
+      .get();
+    
+    const words = [];
+    querySnapshot.forEach(doc => {
+      const data = doc.data();
+      words.push({
+        id: doc.id,
+        word: data.word,
+        meaning: data.meaning || '',
+        audioUrl: data.audioUrl || ''
+      });
+    });
+    
+    res.status(200).json(words);
+  } catch (error) {
+    console.error("Error getting words in group:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error retrieving words in group",
+      error: error.message
+    });
+  }
+};
+
+// Timeout a word from IoT device
+export const timeoutWordFromIoT = async (req, res) => {
+  try {
+    // Get user ID from the authenticated user
+    const { uid } = req.user;
+    
+    // Get wordId and timeout duration from request
+    const { wordId } = req.params;
+    const { timeoutMinutes = 60 } = req.body;
+    
+    if (!wordId) {
+      return res.status(400).json({
+        success: false,
+        message: "Word ID is required"
+      });
+    }
+    
+    // Convert timeout duration to number
+    const duration = parseInt(timeoutMinutes, 10);
+    if (isNaN(duration) || duration <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Timeout duration must be a positive number in minutes"
+      });
+    }
+    
+    // First check if word exists and belongs to user
+    const wordRef = db.collection('words').doc(wordId);
+    const wordDoc = await wordRef.get();
+    
+    if (!wordDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Word not found"
+      });
+    }
+    
+    const wordData = wordDoc.data();
+    
+    // Get the word's group to check ownership
+    const groupRef = db.collection('wordGroups').doc(wordData.groupId);
+    const groupDoc = await groupRef.get();
+    
+    if (!groupDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Word group not found"
+      });
+    }
+    
+    const groupData = groupDoc.data();
+    if (groupData.userId !== uid) {
+      return res.status(403).json({
+        success: false,
+        message: "You don't have access to this word"
+      });
+    }
+    
+    // Set the timeout using server timestamp
+    const result = await timeoutWord(wordId, duration);
+    
+    res.status(200).json({
+      wordId: wordId,
+      ...result
+    });
+  } catch (error) {
+    console.error("Error setting word timeout from IoT:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error setting word timeout",
+      error: error.message
+    });
+  }
+};
+
+// Assess pronunciation of a word
+export const assessWordPronunciation = async (req, res) => {
+  try {
+    console.log("Received pronunciation assessment request");
+    
+    // Get user ID from the authenticated user
+    const { uid } = req.user;
+    console.log(`User ID: ${uid}`);
+    
+    // Get the word from request parameters
+    const { word } = req.body;
+    console.log(`Word to assess: ${word}`);
+    
+    if (!word) {
+      return res.status(400).json({
+        success: false,
+        message: "Word is required in request body"
+      });
+    }
+    
+    // Debug request body and files
+    console.log(`Request has file: ${req.file ? 'Yes' : 'No'}`);
+    
+    // Check for the audio file
+    if (!req.file) {
+      console.error("No audio file provided in the request");
+      return res.status(400).json({
+        success: false,
+        message: "Audio file (.wav) is required"
+      });
+    }
+    
+    // Debug file info
+    console.log(`File info: ${JSON.stringify({
+      fieldname: req.file.fieldname,
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    }, null, 2)}`);
+    
+    // Get audio file buffer from request
+    const audioBuffer = req.file.buffer;
+    
+    if (!audioBuffer || audioBuffer.length === 0) {
+      console.error("Empty audio buffer");
+      return res.status(400).json({
+        success: false,
+        message: "Empty audio file provided"
+      });
+    }
+    
+    console.log(`Audio buffer size: ${audioBuffer.length} bytes`);
+    
+    // Send to Azure for pronunciation assessment
+    try {
+      const assessmentResult = await assessPronunciation(word, audioBuffer);
+      
+      // Log result
+      console.log(`Pronunciation assessment for "${word}" - Accuracy Score: ${assessmentResult.accuracyScore}`);
+      
+      // Return the assessment results - simplified to just the accuracy score
+      res.status(200).json({
+        accuracyScore: assessmentResult.accuracyScore
+      });
+    } catch (azureError) {
+      console.error("Azure service error:", azureError);
+      
+      // Specific error handling for Speech SDK errors
+      const errorMessage = azureError.message || "Unknown error";
+      const errorCode = azureError.errorCode || 0;
+      
+      // Return a more detailed error
+      res.status(500).json({
+        success: false,
+        message: "Error in Azure Speech Service",
+        error: errorMessage,
+        code: errorCode,
+        details: "Check server logs for more information"
+      });
+    }
+  } catch (error) {
+    console.error("Error in pronunciation assessment controller:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error assessing pronunciation",
+      error: error.message
+    });
+  }
+};
+</file>
+
+<file path="src/controllers/progressController.js">
+import WordGroup from "../models/WordGroup.js";
+
+export const getProgress = async (req, res) => {
+  try {
+    const { uid } = req.user;
+
+    const progress = await WordGroup.findByUserId(uid);
+
+    res.status(200).json({
+      success: true,
+      data: progress,
+    });
+  } catch (error) {
+    console.error("Error getting progress:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi lấy thông tin tiến độ",
+      error: error.message,
+    });
+  }
+};
+</file>
+
+<file path="src/middleware/iotAuthMiddleware.js">
+import User from "../models/User.js";
+
+const iotAuthMiddleware = async (req, res, next) => {
+  const token = req.headers["x-device-token"];
+
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      message: "Device token missing",
+    });
+  }
+
+  try {
+    // The token is just the user's UID
+    const user = await User.findByUid(token);
+
+    if (!user) {
+      return res.status(403).json({
+        success: false,
+        message: "Invalid token",
+      });
+    }
+
+    // Add user info to the request object
+    req.user = {
+      uid: user.uid,
+      id: user.id
+    };
+
+    next();
+  } catch (error) {
+    console.error("Token validation error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error during authentication",
+    });
+  }
+};
+
+export default iotAuthMiddleware;
+</file>
+
+<file path="src/routes/progressRoutes.js">
+import express from "express";
+import { verifyFirebaseToken } from "../middleware/authMiddleware.js";
+import { getProgress } from "../controllers/progressController.js";
+
+const router = express.Router();
+
+router.use(verifyFirebaseToken);
+
+router.get("/", getProgress);
+
+export default router;
+</file>
+
+<file path="src/middleware/authMiddleware.js">
+import { admin } from "../config/firebase.js";
+
+export const verifyFirebaseToken = async (req, res, next) => {
+  try {
+    const idToken = req.headers.authorization?.split("Bearer ")[1];
+
+    if (!idToken) {
+      return res.status(401).json({
+        success: false,
+        message: "Không tìm thấy token xác thực",
+      });
+    }
+
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    req.user = {
+      uid: decodedToken.uid,
+    };
+
+    next();
+  } catch (error) {
+    console.error("Token verification error:", error);
+    return res.status(401).json({
+      success: false,
+      message: "Token không hợp lệ hoặc đã hết hạn",
+    });
+  }
+};
+</file>
+
+<file path="src/models/WordGroup.js">
+import { admin, db } from "../config/firebase.js";
+
+const wordGroupsCollection = db.collection("wordGroups");
+
+class WordGroup {
+  static async findAll(userId) {
+    const snapshot = await wordGroupsCollection
+      .where("userId", "==", userId)
+      .orderBy("createdAt", "desc")
+      .get();
+
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  }
+
+  static async findById(id) {
+    const doc = await wordGroupsCollection.doc(id).get();
+    if (!doc.exists) {
+      return null;
+    }
+    return {
+      id: doc.id,
+      ...doc.data(),
+    };
+  }
+
+  static async findByUserId(userId) {
+    const snapshot = await wordGroupsCollection
+      .where("userId", "==", userId)
+      .get();
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  }
+
+  static async create(groupData) {
+    const newGroup = {
+      name: groupData.name,
+      userId: groupData.userId,
+      createdAt: admin.firestore.Timestamp.now(),
+      updatedAt: admin.firestore.Timestamp.now(),
+      totalWords: 0,
+      learnedWords: 0,
+    };
+
+    const docRef = await wordGroupsCollection.add(newGroup);
+    return {
+      id: docRef.id,
+      ...newGroup,
+    };
+  }
+
+  static async update(id, groupData) {
+    const updatedData = {
+      ...groupData,
+      updatedAt: admin.firestore.Timestamp.now(),
+    };
+
+    await wordGroupsCollection.doc(id).update(updatedData);
+
+    const updated = await this.findById(id);
+    return updated;
+  }
+
+  static async delete(id) {
+    await wordGroupsCollection.doc(id).delete();
+    return { id };
+  }
+}
+
+export default WordGroup;
+</file>
+
+<file path="src/routes/iotRoutes.js">
+import express from "express";
+import { getWordGroups, getWordsInGroup, timeoutWordFromIoT, assessWordPronunciation, upload } from "../controllers/iotController.js";
+import iotAuthMiddleware from "../middleware/iotAuthMiddleware.js";
+
+const router = express.Router();
+
+router.use(iotAuthMiddleware);
+
+// Get all word groups for the authenticated user
+router.get("/word-groups", getWordGroups);
+
+// Get all words in a specific group
+router.get("/word-groups/:groupId/words", getWordsInGroup);
+
+// Timeout a word
+router.post("/words/:wordId/timeout", timeoutWordFromIoT);
+
+// Assess pronunciation of a word
+router.post("/pronunciation/assess", upload.single('audio'), assessWordPronunciation);
+
+export default router;
+</file>
+
+<file path="package.json">
+{
+  "name": "flashcard-iot-backend",
+  "version": "1.0.0",
+  "description": "Backend for IoT English flashcard project",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "nodemon src/index.js"
+  },
+  "dependencies": {
+    "axios": "^1.8.4",
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "firebase": "^11.6.0",
+    "firebase-admin": "^11.10.1",
+    "microsoft-cognitiveservices-speech-sdk": "^1.43.1",
+    "multer": "^1.4.5-lts.1",
+    "node-fetch": "^3.3.2",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
+</file>
+
+<file path="src/controllers/authController.js">
+import User from "../models/User.js";
+
+export const register = async (req, res) => {
+  try {
+    const { uid, email, name } = req.body;
+
+    const existingUser = await User.findByUid(uid);
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: "Tài khoản đã tồn tại",
+      });
+    }
+
+    const user = await User.create({ uid, email, name });
+
+    res.status(201).json({
+      success: true,
+      message: "Đăng ký thành công",
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi server",
+    });
+  }
+};
+</file>
+
+<file path="src/controllers/wordController.js">
+import Word from "../models/Word.js";
+import WordGroup from "../models/WordGroup.js";
+import { timeoutWord } from "../utils/wordTimeoutManager.js";
+
+export const updateWord = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { word, meaning, type, status } = req.body;
+
+    const updatedData = {};
+
+    if (word) updatedData.word = word;
+    if (meaning) updatedData.meaning = meaning;
+    if (type) updatedData.type = type;
+    if (status) updatedData.status = status;
+
+    const updatedWord = await Word.update(id, updatedData);
+
+    if (status) {
+      const group = await WordGroup.findById(updatedWord.groupId);
+
+      await WordGroup.update(updatedWord.groupId, {
+        learnedWords: group.learnedWords + (status === "active" ? 1 : -1),
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Cập nhật từ thành công",
+      data: updatedWord,
+    });
+  } catch (error) {
+    console.error("Error updating word:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi cập nhật từ",
+      error: error.message,
+    });
+  }
+};
+
+export const deleteWord = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const word = await Word.findById(id);
+
+    const group = await WordGroup.findById(word.groupId);
+
+    await Promise.all([
+      WordGroup.update(word.groupId, {
+        totalWords: group.totalWords - 1,
+        learnedWords: group.learnedWords - (word.status === "active" ? 1 : 0),
+      }),
+      Word.delete(id),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: "Xóa từ thành công",
+    });
+  } catch (error) {
+    console.error("Error deleting word:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi xóa từ",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Set a timeout for a word
+ */
+export const setWordTimeout = async (req, res) => {
+  try {
+    const { wordId } = req.params;
+    const { timeoutMinutes = 60 } = req.body;
+    
+    if (!wordId) {
+      return res.status(400).json({
+        success: false,
+        message: "Word ID is required"
+      });
+    }
+    
+    // Get the timeout duration in minutes
+    const duration = parseInt(timeoutMinutes, 10);
+    
+    if (isNaN(duration) || duration <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Timeout duration must be a positive number"
+      });
+    }
+    
+    // Set the timeout using server timestamp
+    const result = await timeoutWord(wordId, duration);
+    
+    res.status(200).json({
+      success: true,
+      message: `Word has been timed out for ${duration} minutes using server time`,
+      wordId: wordId,
+      ...result
+    });
+  } catch (error) {
+    console.error("Error setting word timeout:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error setting word timeout",
+      error: error.message
+    });
+  }
+};
+</file>
+
+<file path="src/controllers/wordGroupController.js">
+import Word from "../models/Word.js";
+import WordGroup from "../models/WordGroup.js";
+import { getUSPronunciationURL } from "../utils/pronunciationScraper.js";
+
+export const getWordGroups = async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const groups = await WordGroup.findAll(userId);
+
+    res.status(200).json({
+      success: true,
+      data: groups,
+    });
+  } catch (error) {
+    console.error("Error getting word groups:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi lấy danh sách nhóm từ",
+      error: error.message,
+    });
+  }
+};
+
+export const createWordGroup = async (req, res) => {
+  try {
+    const { name } = req.body;
+    const userId = req.user.uid;
+
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: "Tên nhóm từ không được để trống",
+      });
+    }
+
+    const group = await WordGroup.create({
+      name,
+      userId,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Tạo nhóm từ thành công",
+      data: group,
+    });
+  } catch (error) {
+    console.error("Error creating word group:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi tạo nhóm từ",
+      error: error.message,
+    });
+  }
+};
+
+export const getWordGroupById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const group = await WordGroup.findById(id);
+
+    if (!group) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy nhóm từ",
+      });
+    }
+
+    if (group.userId !== req.user.uid) {
+      return res.status(403).json({
+        success: false,
+        message: "Bạn không có quyền truy cập nhóm từ này",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: group,
+    });
+  } catch (error) {
+    console.error("Error getting word group:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi lấy thông tin nhóm từ",
+      error: error.message,
+    });
+  }
+};
+
+export const updateWordGroup = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name } = req.body;
+
+    const updatedGroup = await WordGroup.update(id, { name });
+
+    res.status(200).json({
+      success: true,
+      message: "Cập nhật nhóm từ thành công",
+      data: updatedGroup,
+    });
+  } catch (error) {
+    console.error("Error updating word group:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi cập nhật nhóm từ",
+      error: error.message,
+    });
+  }
+};
+
+export const deleteWordGroup = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [words] = await Promise.all([
+      Word.findByGroupId(id),
+      WordGroup.delete(id),
+    ]);
+
+    await Promise.all(words.map((word) => Word.delete(word.id)));
+
+    res.status(200).json({
+      success: true,
+      message: "Xóa nhóm từ thành công",
+    });
+  } catch (error) {
+    console.error("Error deleting word group:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi xóa nhóm từ",
+      error: error.message,
+    });
+  }
+};
+
+export const getWordsInGroup = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const group = await WordGroup.findById(id);
+
+    if (!group) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy nhóm từ",
+      });
+    }
+
+    if (group.userId !== req.user.uid) {
+      return res.status(403).json({
+        success: false,
+        message: "Bạn không có quyền truy cập nhóm từ này",
+      });
+    }
+
+    const words = await Word.findByGroupId(id);
+
+    res.status(200).json({
+      success: true,
+      data: words,
+    });
+  } catch (error) {
+    console.error("Error getting words in group:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi lấy danh sách từ trong nhóm",
+      error: error.message,
+    });
+  }
+};
+
+export const addWordToGroup = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { word, meaning, type } = req.body;
+
+    if (!word || !meaning) {
+      return res.status(400).json({
+        success: false,
+        message: "Từ và nghĩa không được để trống",
+      });
+    }
+
+    // Fetch the US pronunciation URL from Cambridge Dictionary
+    let audioUrl = "";
+    try {
+      audioUrl = await getUSPronunciationURL(word) || "";
+    } catch (error) {
+      console.error(`Error fetching pronunciation for "${word}":`, error);
+      // Continue even if pronunciation fetching fails
+    }
+
+    console.log(audioUrl);
+
+    const data = await Word.create({
+      word,
+      meaning,
+      type,
+      groupId: id,
+      audioUrl, // Add the pronunciation URL
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Thêm từ vào nhóm thành công",
+      data,
+    });
+  } catch (error) {
+    console.error("Error adding word to group:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi thêm từ vào nhóm",
+      error: error.message,
+    });
+  }
+};
+</file>
+
+<file path="src/models/Word.js">
+import { admin, db } from "../config/firebase.js";
+
+const wordsCollection = db.collection("words");
+
+class Word {
+  static async findByGroupId(groupId) {
+    const snapshot = await wordsCollection
+      .where("groupId", "==", groupId)
+      .orderBy("createdAt", "desc")
+      .get();
+
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  }
+
+  static async findById(id) {
+    const doc = await wordsCollection.doc(id).get();
+    if (!doc.exists) {
+      return null;
+    }
+    return {
+      id: doc.id,
+      ...doc.data(),
+    };
+  }
+
+  static async create(wordData) {
+    const id = wordData.groupId;
+
+    const newWord = {
+      ...wordData,
+      status: "active",
+      lastReviewed: admin.firestore.Timestamp.now(),
+      timeoutUntil: null,
+      createdAt: admin.firestore.Timestamp.now(),
+      updatedAt: admin.firestore.Timestamp.now(),
+    };
+
+    const groupRef = db.collection("wordGroups").doc(id);
+    const groupDoc = await groupRef.get();
+
+    if (groupDoc.exists) {
+      const groupData = groupDoc.data();
+      await groupRef.update({
+        totalWords: (groupData?.totalWords || 0) + 1,
+        updatedAt: admin.firestore.Timestamp.now(),
+      });
+    }
+
+    const docRef = await wordsCollection.add(newWord);
+    return {
+      id: docRef.id,
+      ...newWord,
+    };
+  }
+
+  static async update(id, wordData) {
+    const updatedData = {
+      ...wordData,
+      updatedAt: admin.firestore.Timestamp.now(),
+    };
+
+    await wordsCollection.doc(id).update(updatedData);
+
+    const updated = await this.findById(id);
+    return updated;
+  }
+
+  static async delete(id) {
+    return await wordsCollection.doc(id).delete();
+  }
+}
+
+export default Word;
+</file>
+
+<file path="src/routes/authRoutes.js">
+import express from "express";
+import { register } from "../controllers/authController.js";
+const router = express.Router();
+
+router.post("/register", register);
+
+export default router;
+</file>
+
+<file path="src/routes/wordGroupRoutes.js">
+import express from "express";
+import {
+  getWordGroups,
+  createWordGroup,
+  getWordGroupById,
+  updateWordGroup,
+  deleteWordGroup,
+  getWordsInGroup,
+  addWordToGroup,
+} from "../controllers/wordGroupController.js";
+import { verifyFirebaseToken } from "../middleware/authMiddleware.js";
+
+const router = express.Router();
+
+router.use(verifyFirebaseToken);
+
+router.get("/", getWordGroups);
+router.post("/", createWordGroup);
+router.get("/:id", getWordGroupById);
+router.put("/:id", updateWordGroup);
+router.delete("/:id", deleteWordGroup);
+router.get("/:id/words", getWordsInGroup);
+router.post("/:id/words", addWordToGroup);
+
+export default router;
+</file>
+
+<file path="src/routes/wordRoutes.js">
+import express from "express";
+import { updateWord, deleteWord, setWordTimeout } from "../controllers/wordController.js";
+import { verifyFirebaseToken } from "../middleware/authMiddleware.js";
+
+const router = express.Router();
+
+router.use(verifyFirebaseToken);
+
+router.put("/:id", updateWord);
+router.delete("/:id", deleteWord);
+router.post("/:wordId/timeout", setWordTimeout);
+
+export default router;
+</file>
+
+<file path="src/index.js">
+import express from "express";
+import cors from "cors";
+import authRoutes from "./routes/authRoutes.js";
+import iotRoutes from "./routes/iotRoutes.js";
+import wordGroupRoutes from "./routes/wordGroupRoutes.js";
+import wordRoutes from "./routes/wordRoutes.js";
+import progressRoutes from "./routes/progressRoutes.js";
+import bluetoothRoutes from "./routes/bluetoothRoutes.js";
+import { scheduleWordTimeoutCheck } from "./utils/wordTimeoutManager.js";
+import { errorHandler } from "./middleware/errorMiddleware.js";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+const app = express();
+
+// Log incoming requests
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
+  next();
+});
+
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.use("/api/auth", authRoutes);
+app.use("/api/iot", iotRoutes);
+app.use("/api/word-groups", wordGroupRoutes);
+app.use("/api/words", wordRoutes);
+app.use("/api/progress", progressRoutes);
+app.use("/api/bluetooth", bluetoothRoutes);
+
+app.get("/", (req, res) => {
+  res.json({
+    message: "Welcome to Flashcard IoT API",
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  console.log(`404 - Not Found: ${req.originalUrl}`);
+  res.status(404).json({
+    success: false,
+    message: "API endpoint not found",
+  });
+});
+
+// Error handler middleware
+app.use(errorHandler);
+
+const PORT = process.env.PORT || 5000;
+const server = app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+  
+  // Start the word timeout check mechanism
+  // Check every 1 minutes for timed-out words that need to be reactivated
+  scheduleWordTimeoutCheck(1);
+});
+</file>
+
+<file path="src/models/User.js">
+import { admin, db } from "../config/firebase.js";
+
+const usersCollection = db.collection("users");
+
+class User {
+  static async findByUid(uid) {
+    const snapshot = await usersCollection.where("uid", "==", uid).get();
+    if (snapshot.empty) {
+      return null;
+    }
+
+    const userData = snapshot.docs[0].data();
+    return {
+      id: snapshot.docs[0].id,
+      ...userData,
+    };
+  }
+
+  static async create(userData) {
+    const userRef = await usersCollection.add({
+      uid: userData.uid,
+      email: userData.email,
+      name: userData.name,
+      createdAt: admin.firestore.Timestamp.now(),
+    });
+
+    return {
+      id: userRef.id,
+      email: userData.email,
+      name: userData.name,
+    };
+  }
+}
+
+export default User;
+</file>
+
+</files>

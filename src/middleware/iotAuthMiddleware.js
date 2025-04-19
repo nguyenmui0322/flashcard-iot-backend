@@ -1,35 +1,38 @@
 import User from "../models/User.js";
 
 const iotAuthMiddleware = async (req, res, next) => {
-  const apiKey = req.headers["x-api-key"];
+  const token = req.headers["x-device-token"];
 
-  if (!apiKey) {
+  if (!token) {
     return res.status(401).json({
       success: false,
-      message: "API key missing",
+      message: "Device token missing",
     });
   }
 
   try {
-    const isValid = await User.findByUid(apiKey);
+    // The token is just the user's UID
+    const user = await User.findByUid(token);
 
-    if (!isValid) {
+    if (!user) {
       return res.status(403).json({
         success: false,
-        message: "Invalid API key",
+        message: "Invalid token",
       });
     }
 
+    // Add user info to the request object
     req.user = {
-      uid: apiKey,
+      uid: user.uid,
+      id: user.id
     };
 
     next();
   } catch (error) {
-    console.error("API key validation error:", error);
+    console.error("Token validation error:", error);
     return res.status(500).json({
       success: false,
-      message: "Lỗi server khi xác thực API key",
+      message: "Server error during authentication",
     });
   }
 };

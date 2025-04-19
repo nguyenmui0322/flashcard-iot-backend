@@ -1,5 +1,6 @@
-import WordGroup from "../models/WordGroup.js";
 import Word from "../models/Word.js";
+import WordGroup from "../models/WordGroup.js";
+import { getUSPronunciationURL } from "../utils/pronunciationScraper.js";
 
 export const getWordGroups = async (req, res) => {
   try {
@@ -179,11 +180,23 @@ export const addWordToGroup = async (req, res) => {
       });
     }
 
+    // Fetch the US pronunciation URL from Cambridge Dictionary
+    let audioUrl = "";
+    try {
+      audioUrl = await getUSPronunciationURL(word) || "";
+    } catch (error) {
+      console.error(`Error fetching pronunciation for "${word}":`, error);
+      // Continue even if pronunciation fetching fails
+    }
+
+    console.log(audioUrl);
+
     const data = await Word.create({
       word,
       meaning,
       type,
       groupId: id,
+      audioUrl, // Add the pronunciation URL
     });
 
     res.status(201).json({

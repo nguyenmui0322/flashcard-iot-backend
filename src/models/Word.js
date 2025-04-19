@@ -31,10 +31,9 @@ class Word {
 
     const newWord = {
       ...wordData,
-      status: "timeout",
-      audioUrl: "",
+      status: "active",
       lastReviewed: admin.firestore.Timestamp.now(),
-      timeoutUntil: admin.firestore.Timestamp.now(),
+      timeoutUntil: null,
       createdAt: admin.firestore.Timestamp.now(),
       updatedAt: admin.firestore.Timestamp.now(),
     };

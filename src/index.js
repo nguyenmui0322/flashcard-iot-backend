@@ -5,11 +5,20 @@ import iotRoutes from "./routes/iotRoutes.js";
 import wordGroupRoutes from "./routes/wordGroupRoutes.js";
 import wordRoutes from "./routes/wordRoutes.js";
 import progressRoutes from "./routes/progressRoutes.js";
+import bluetoothRoutes from "./routes/bluetoothRoutes.js";
+import { scheduleWordTimeoutCheck } from "./utils/wordTimeoutManager.js";
+import { errorHandler } from "./middleware/errorMiddleware.js";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 const app = express();
+
+// Log incoming requests
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
+  next();
+});
 
 app.use(cors());
 app.use(express.json());
@@ -20,6 +29,7 @@ app.use("/api/iot", iotRoutes);
 app.use("/api/word-groups", wordGroupRoutes);
 app.use("/api/words", wordRoutes);
 app.use("/api/progress", progressRoutes);
+app.use("/api/bluetooth", bluetoothRoutes);
 
 app.get("/", (req, res) => {
   res.json({
@@ -27,22 +37,23 @@ app.get("/", (req, res) => {
   });
 });
 
+// 404 handler
 app.use((req, res) => {
+  console.log(`404 - Not Found: ${req.originalUrl}`);
   res.status(404).json({
     success: false,
     message: "API endpoint not found",
   });
 });
 
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    success: false,
-    message: "Internal server error",
-  });
-});
+// Error handler middleware
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  
+  // Start the word timeout check mechanism
+  // Check every 1 minutes for timed-out words that need to be reactivated
+  scheduleWordTimeoutCheck(1);
 });
