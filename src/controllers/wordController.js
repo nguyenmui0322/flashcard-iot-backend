@@ -1,6 +1,9 @@
 import Word from "../models/Word.js";
 import WordGroup from "../models/WordGroup.js";
 import { timeoutWord } from "../utils/wordTimeoutManager.js";
+import { generateContent } from "../config/googleAI.js";
+import { wordPrompt } from "../utils/prompt.js";
+import { db } from "../config/firebase.js";
 
 export const updateWord = async (req, res) => {
   try {
@@ -107,6 +110,60 @@ export const setWordTimeout = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Error setting word timeout",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Generate words using Google's Generative AI
+ */
+export const generateWords = async (req, res) => {
+  try {
+    const { topic, excludedWords = [] } = req.body;
+    
+    // Generate the prompt for word generation
+    const prompt = wordPrompt(topic, excludedWords);
+    
+    // Generate content using Google's Generative AI
+    const generatedContent = await generateContent(prompt);
+    
+    // Clean the response text if it contains Markdown code blocks
+    let cleanedContent = generatedContent;
+    if (generatedContent.includes("```")) {
+      // Extract content between code fences (```json and ```)
+      const codeBlockMatch = generatedContent.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch && codeBlockMatch[1]) {
+        cleanedContent = codeBlockMatch[1].trim();
+      }
+    }
+    
+    // Parse the JSON response
+    let parsedContent;
+    try {
+      parsedContent = JSON.parse(cleanedContent);
+    } catch (error) {
+      console.error("Error parsing generated content:", error);
+      console.error("Raw content:", generatedContent);
+      console.error("Cleaned content:", cleanedContent);
+      return res.status(500).json({
+        success: false,
+        message: "Error parsing AI-generated content",
+        error: error.message,
+        rawContent: generatedContent
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      message: "Words generated successfully",
+      data: parsedContent
+    });
+  } catch (error) {
+    console.error("Error generating words:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error generating words",
       error: error.message
     });
   }

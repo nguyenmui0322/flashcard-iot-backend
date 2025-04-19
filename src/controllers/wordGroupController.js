@@ -1,6 +1,9 @@
 import Word from "../models/Word.js";
 import WordGroup from "../models/WordGroup.js";
 import { getUSPronunciationURL } from "../utils/pronunciationScraper.js";
+import { generateContent } from "../config/googleAI.js";
+import { wordGroupPrompt } from "../utils/prompt.js";
+import { db } from "../config/firebase.js";
 
 export const getWordGroups = async (req, res) => {
   try {
@@ -210,6 +213,103 @@ export const addWordToGroup = async (req, res) => {
       success: false,
       message: "Lỗi khi thêm từ vào nhóm",
       error: error.message,
+    });
+  }
+};
+
+/**
+ * Generate a word group with words using Google's Generative AI
+ */
+export const generateWordGroup = async (req, res) => {
+  try {
+    const { excludedTopics = [] } = req.body;
+    const userId = req.user.uid;
+    
+    // Generate prompt for word group generation
+    const prompt = wordGroupPrompt(excludedTopics);
+    
+    // Generate content using Google's Generative AI
+    const generatedContent = await generateContent(prompt);
+    
+    // Clean the response text if it contains Markdown code blocks
+    let cleanedContent = generatedContent;
+    if (generatedContent.includes("```")) {
+      // Extract content between code fences (```json and ```)
+      const codeBlockMatch = generatedContent.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch && codeBlockMatch[1]) {
+        cleanedContent = codeBlockMatch[1].trim();
+      }
+    }
+    
+    // Parse the JSON response
+    let parsedContent;
+    try {
+      parsedContent = JSON.parse(cleanedContent);
+    } catch (error) {
+      console.error("Error parsing generated content:", error);
+      console.error("Raw content:", generatedContent);
+      console.error("Cleaned content:", cleanedContent);
+      return res.status(500).json({
+        success: false,
+        message: "Error parsing AI-generated content",
+        error: error.message,
+        rawContent: generatedContent
+      });
+    }
+    
+    // Extract word group name and words from the parsed content
+    const { wordGroup: name, words } = parsedContent;
+    
+    if (!name || !words || !Array.isArray(words) || words.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid AI-generated content structure",
+        data: parsedContent
+      });
+    }
+    
+    // Create the word group
+    const group = await WordGroup.create({
+      name,
+      userId,
+      totalWords: words.length,
+      learnedWords: 0
+    });
+    
+    // Add the words to the group
+    const wordsPromises = words.map(async (wordItem) => {
+      let audioUrl = "";
+      try {
+        audioUrl = await getUSPronunciationURL(wordItem.word) || "";
+      } catch (error) {
+        console.error(`Error fetching pronunciation for "${wordItem.word}":`, error);
+      }
+      
+      return Word.create({
+        word: wordItem.word,
+        meaning: wordItem.meaning,
+        type: wordItem.type,
+        groupId: group.id,
+        audioUrl,
+      });
+    });
+    
+    const createdWords = await Promise.all(wordsPromises);
+    
+    res.status(201).json({
+      success: true,
+      message: "Word group generated successfully",
+      data: {
+        group,
+        words: createdWords,
+      }
+    });
+  } catch (error) {
+    console.error("Error generating word group:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error generating word group",
+      error: error.message
     });
   }
 };
